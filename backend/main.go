@@ -96,11 +96,12 @@ func parseAndSaveNote(c *gin.Context) {
 				dosage = extractDosage(req.RawNote)
 			}
 			item := models.ParsedItem{
-				RecordID: record.ID,
-				Category: p.Category,
-				ItemName: p.ItemName,
-				Dosage:   dosage,
-				Price:    p.Price,
+				RecordID:   record.ID,
+				Category:   p.Category,
+				ItemName:   p.ItemName,
+				Dosage:     dosage,
+				Price:      p.Price,
+				Confidence: 1.0,
 			}
 			parsed = append(parsed, item)
 			seenItems[p.ItemName] = true
@@ -109,12 +110,18 @@ func parseAndSaveNote(c *gin.Context) {
 
 	// Add a fallback observation entry for remaining text if no parsed items
 	if len(parsed) == 0 {
+		lower := strings.ToLower(req.RawNote)
+		confidence := 0.3
+		if strings.Contains(lower, "pain") || strings.Contains(lower, "cough") || strings.Contains(lower, "fever") {
+			confidence = 0.75
+		}
 		parsed = append(parsed, models.ParsedItem{
-			RecordID: record.ID,
-			Category: "Observation",
-			ItemName: "Clinical Notes",
-			Dosage:   "",
-			Price:    0,
+			RecordID:   record.ID,
+			Category:   "Observation",
+			ItemName:   "Clinical Notes",
+			Dosage:     "",
+			Price:      0,
+			Confidence: confidence,
 		})
 	}
 
@@ -129,11 +136,14 @@ func parseAndSaveNote(c *gin.Context) {
 	// Calculate total and update medical record
 	total := 0.0
 	for _, item := range parsed {
+		if item.Confidence == 0 {
+			item.Confidence = 1.0
+		}
 		total += item.Price
 	}
 	// Include manual extra charge
 	total += record.ExtraCharge
-	
+
 	// Use explicit Update instead of Save to ensure fields persist
 	if err := DB.Model(&record).Updates(models.MedicalRecord{
 		ExtraCharge: record.ExtraCharge,

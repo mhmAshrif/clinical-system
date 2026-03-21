@@ -26,12 +26,13 @@ type MedicalRecord struct {
 
 // ParsedItem stores individual drugs or tests extracted by AI
 type ParsedItem struct {
-	ID        uint    `json:"id" gorm:"primaryKey"`
-	RecordID  uint    `json:"record_id"`
-	Category  string  `json:"category"` // 'Drug', 'Lab Test', 'Observation'
-	ItemName  string  `json:"item_name"`
-	Dosage    string  `json:"dosage"`
-	Price     float64 `json:"price"`
+	ID         uint    `json:"id" gorm:"primaryKey"`
+	RecordID   uint    `json:"record_id"`
+	Category   string  `json:"category"` // 'Drug', 'Lab Test', 'Observation'
+	ItemName   string  `json:"item_name"`
+	Dosage     string  `json:"dosage"`
+	Price      float64 `json:"price"`
+	Confidence float64 `json:"confidence,omitempty" gorm:"-"`
 }
 
 // PriceList is our reference table for billing
