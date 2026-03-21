@@ -133,9 +133,14 @@ func parseAndSaveNote(c *gin.Context) {
 	}
 	// Include manual extra charge
 	total += record.ExtraCharge
-	record.TotalBill = total
-	if err := DB.Save(&record).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update total bill"})
+	
+	// Use explicit Update instead of Save to ensure fields persist
+	if err := DB.Model(&record).Updates(models.MedicalRecord{
+		ExtraCharge: record.ExtraCharge,
+		TotalBill:   total,
+	}).Error; err != nil {
+		log.Printf("Failed to update record: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update total bill: " + err.Error()})
 		return
 	}
 
@@ -143,7 +148,7 @@ func parseAndSaveNote(c *gin.Context) {
 		RecordID:    record.ID,
 		PatientID:   req.PatientID,
 		TotalBill:   total,
-		ExtraCharge: record.ExtraCharge,
+		ExtraCharge: req.ExtraCharge,
 		ParsedItems: parsed,
 		Notes:       req.RawNote,
 	})

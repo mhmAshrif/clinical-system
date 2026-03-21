@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS medical_records (
     id SERIAL PRIMARY KEY,
     patient_id INT REFERENCES patients(id),
     raw_note TEXT NOT NULL,
+    extra_charge DECIMAL(10,2) DEFAULT 0,
     total_bill DECIMAL(10,2) DEFAULT 0,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
