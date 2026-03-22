@@ -14,6 +14,12 @@ function App() {
   const [selectedPatient, setSelectedPatient] = useState(null)
   const [showPatientForm, setShowPatientForm] = useState(false)
   const [newPatient, setNewPatient] = useState({ name: '', age: '', gender: '' })
+  const [aiResult, setAiResult] = useState(null)
+  const [aiLoading, setAiLoading] = useState(false)
+  const [editingPatient, setEditingPatient] = useState(null)
+  const [showEditPatientForm, setShowEditPatientForm] = useState(false)
+  const [editingRecord, setEditingRecord] = useState(null)
+  const [showEditRecordForm, setShowEditRecordForm] = useState(false)
 
   // Load patients on component mount
   useEffect(() => {
@@ -70,6 +76,43 @@ function App() {
       setError(err.message)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleAIParsing = async () => {
+    if (!patientId || !rawNote.trim()) {
+      alert('Please enter both Patient ID and clinic notes')
+      return
+    }
+
+    setAiLoading(true)
+    setAiResult(null)
+    setError(null)
+
+    try {
+      const response = await fetch('http://localhost:8080/ai-parse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          patient_id: parseInt(patientId),
+          raw_note: rawNote.trim(),
+          extra_charge: parseFloat(extraCharge) || 0
+        })
+      })
+
+      const responseBody = await response.json().catch(() => null)
+      if (!response.ok) {
+        const message = responseBody?.error || response.statusText || 'Unknown error'
+        throw new Error(message)
+      }
+
+      setAiResult(responseBody)
+
+    } catch (err) {
+      console.error('AI Parse Error:', err)
+      setError(err.message)
+    } finally {
+      setAiLoading(false)
     }
   }
 
@@ -229,6 +272,124 @@ function App() {
     }
   }
 
+  const editPatient = async () => {
+    if (!editingPatient.name || !editingPatient.age || !editingPatient.gender) {
+      alert('Please fill all patient details')
+      return
+    }
+
+    try {
+      const response = await fetch(`http://localhost:8080/patients/${editingPatient.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editingPatient),
+      })
+
+      const data = await response.json().catch(() => null)
+      if (!response.ok) {
+        const msg = (data && data.error) ? data.error : response.statusText
+        alert(`Failed to update patient: ${msg}`)
+        return
+      }
+
+      alert('Patient updated successfully!')
+      setShowEditPatientForm(false)
+      setEditingPatient(null)
+      loadPatients()
+    } catch (error) {
+      console.error('Error updating patient:', error)
+      alert(`Failed to update patient: ${error.message}`)
+    }
+  }
+
+  const deletePatient = async (patientId) => {
+    if (!confirm('Are you sure you want to delete this patient? This action cannot be undone.')) {
+      return
+    }
+
+    try {
+      const response = await fetch(`http://localhost:8080/patients/${patientId}`, {
+        method: 'DELETE',
+      })
+
+      const data = await response.json().catch(() => null)
+      if (!response.ok) {
+        const msg = (data && data.error) ? data.error : response.statusText
+        alert(`Failed to delete patient: ${msg}`)
+        return
+      }
+
+      alert('Patient deleted successfully!')
+      loadPatients()
+      if (selectedPatient && selectedPatient.id === patientId) {
+        setSelectedPatient(null)
+        setPatientId('')
+      }
+    } catch (error) {
+      console.error('Error deleting patient:', error)
+      alert(`Failed to delete patient: ${error.message}`)
+    }
+  }
+
+  const editMedicalRecord = async () => {
+    if (!editingRecord.raw_note.trim()) {
+      alert('Please enter clinic notes')
+      return
+    }
+
+    try {
+      const response = await fetch(`http://localhost:8080/medical-records/${editingRecord.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          patient_id: editingRecord.patient_id,
+          raw_note: editingRecord.raw_note.trim(),
+          extra_charge: parseFloat(editingRecord.extra_charge) || 0
+        }),
+      })
+
+      const data = await response.json().catch(() => null)
+      if (!response.ok) {
+        const msg = (data && data.error) ? data.error : response.statusText
+        alert(`Failed to update medical record: ${msg}`)
+        return
+      }
+
+      alert('Medical record updated successfully!')
+      setShowEditRecordForm(false)
+      setEditingRecord(null)
+      handleBilling() // Refresh billing
+    } catch (error) {
+      console.error('Error updating medical record:', error)
+      alert(`Failed to update medical record: ${error.message}`)
+    }
+  }
+
+  const deleteMedicalRecord = async (recordId) => {
+    if (!confirm('Are you sure you want to delete this medical record? This action cannot be undone.')) {
+      return
+    }
+
+    try {
+      const response = await fetch(`http://localhost:8080/medical-records/${recordId}`, {
+        method: 'DELETE',
+      })
+
+      const data = await response.json().catch(() => null)
+      if (!response.ok) {
+        const msg = (data && data.error) ? data.error : response.statusText
+        alert(`Failed to delete medical record: ${msg}`)
+        return
+      }
+
+      alert('Medical record deleted successfully!')
+      handleBilling() // Refresh billing
+    } catch (error) {
+      console.error('Error deleting medical record:', error)
+      alert(`Failed to delete medical record: ${error.message}`)
+    }
+  }
+
   const clearForm = () => {
     setPatientId('')
     setRawNote('')
@@ -283,6 +444,23 @@ function App() {
               <div className="patient-info">
                 <h3>Selected Patient: {selectedPatient.name}</h3>
                 <p>Age: {selectedPatient.age} | Gender: {selectedPatient.gender}</p>
+                <div className="patient-actions">
+                  <button
+                    onClick={() => {
+                      setEditingPatient({...selectedPatient})
+                      setShowEditPatientForm(true)
+                    }}
+                    className="btn-edit"
+                  >
+                    ✏️ Edit
+                  </button>
+                  <button
+                    onClick={() => deletePatient(selectedPatient.id)}
+                    className="btn-delete"
+                  >
+                    🗑️ Delete
+                  </button>
+                </div>
               </div>
             )}
           </section>
@@ -325,6 +503,83 @@ function App() {
                 <div className="modal-actions">
                   <button onClick={createPatient} className="btn-primary">Create Patient</button>
                   <button onClick={() => setShowPatientForm(false)} className="btn-secondary">Cancel</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Edit Patient Form */}
+          {showEditPatientForm && editingPatient && (
+            <div className="modal-overlay">
+              <div className="modal">
+                <h3>Edit Patient</h3>
+                <div className="form-group">
+                  <label>Name:</label>
+                  <input
+                    type="text"
+                    value={editingPatient.name}
+                    onChange={(e) => setEditingPatient({...editingPatient, name: e.target.value})}
+                    placeholder="Patient full name"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Age:</label>
+                  <input
+                    type="number"
+                    value={editingPatient.age}
+                    onChange={(e) => setEditingPatient({...editingPatient, age: e.target.value})}
+                    placeholder="Age in years"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Gender:</label>
+                  <select
+                    value={editingPatient.gender}
+                    onChange={(e) => setEditingPatient({...editingPatient, gender: e.target.value})}
+                  >
+                    <option value="">Select Gender</option>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+                <div className="modal-actions">
+                  <button onClick={editPatient} className="btn-primary">Update Patient</button>
+                  <button onClick={() => { setShowEditPatientForm(false); setEditingPatient(null); }} className="btn-secondary">Cancel</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Edit Medical Record Form */}
+          {showEditRecordForm && editingRecord && (
+            <div className="modal-overlay">
+              <div className="modal">
+                <h3>Edit Medical Record</h3>
+                <div className="form-group">
+                  <label>Doctor's Notes:</label>
+                  <textarea
+                    value={editingRecord.raw_note}
+                    onChange={(e) => setEditingRecord({...editingRecord, raw_note: e.target.value})}
+                    placeholder="Enter all clinic information here (prescriptions, tests, observations)..."
+                    rows={6}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Extra Charge:</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={editingRecord.extra_charge}
+                    onChange={(e) => setEditingRecord({...editingRecord, extra_charge: e.target.value})}
+                    placeholder="0.00"
+                  />
+                </div>
+                <div className="modal-actions">
+                  <button onClick={editMedicalRecord} className="btn-primary">Update Record</button>
+                  <button onClick={() => { setShowEditRecordForm(false); setEditingRecord(null); }} className="btn-secondary">Cancel</button>
                 </div>
               </div>
             </div>
@@ -379,6 +634,14 @@ function App() {
                 <button type="submit" disabled={loading || !patientId} className="btn-primary">
                   {loading ? '🔄 Processing...' : '🤖 Parse & Save'}
                 </button>
+                <button 
+                  type="button" 
+                  onClick={handleAIParsing} 
+                  disabled={aiLoading || !patientId || !rawNote.trim()} 
+                  className="btn-ai"
+                >
+                  {aiLoading ? '🧠 AI Processing...' : '🧠 AI Parse'}
+                </button>
               </div>
             </form>
           </section>
@@ -420,6 +683,88 @@ function App() {
             </section>
           )}
 
+          {/* AI Results Display */}
+          {aiResult && (
+            <section className="section ai-results-section">
+              <h2>🧠 AI-Parsed Results</h2>
+              <div className="results-card ai-results-card">
+                <div className="ai-results-content">
+                  {aiResult.drugs && aiResult.drugs.length > 0 && (
+                    <div className="ai-category">
+                      <h3>💊 Drugs</h3>
+                      <div className="parsed-items">
+                        {aiResult.drugs.map((item, index) => (
+                          <div key={index} className="item item-drug">
+                            <div className="item-header">
+                              <span className="category">Drug</span>
+                              <span className="price">${item.price}</span>
+                            </div>
+                            <div className="item-details">
+                              <strong>{item.item_name}</strong>
+                              {item.dosage && <span className="dosage">({item.dosage})</span>}
+                              {item.confidence && <span className="confidence">Confidence: {item.confidence}%</span>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {aiResult.lab_tests && aiResult.lab_tests.length > 0 && (
+                    <div className="ai-category">
+                      <h3>🧪 Lab Tests</h3>
+                      <div className="parsed-items">
+                        {aiResult.lab_tests.map((item, index) => (
+                          <div key={index} className="item item-lab-test">
+                            <div className="item-header">
+                              <span className="category">Lab Test</span>
+                              <span className="price">${item.price}</span>
+                            </div>
+                            <div className="item-details">
+                              <strong>{item.item_name}</strong>
+                              {item.dosage && <span className="dosage">({item.dosage})</span>}
+                              {item.confidence && <span className="confidence">Confidence: {item.confidence}%</span>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {aiResult.observations && aiResult.observations.length > 0 && (
+                    <div className="ai-category">
+                      <h3>📋 Observations</h3>
+                      <div className="parsed-items">
+                        {aiResult.observations.map((item, index) => (
+                          <div key={index} className="item item-observation">
+                            <div className="item-header">
+                              <span className="category">Observation</span>
+                              <span className="price">${item.price}</span>
+                            </div>
+                            <div className="item-details">
+                              <strong>{item.item_name}</strong>
+                              {item.dosage && <span className="dosage">({item.dosage})</span>}
+                              {item.confidence && <span className="confidence">Confidence: {item.confidence}%</span>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="ai-summary">
+                    <div className="total-bill">
+                      <strong>Extra Charge: ${aiResult.extra_charge?.toFixed(2) ?? '0.00'}</strong>
+                    </div>
+                    <div className="total-bill">
+                      <strong>AI-Calculated Total: ${aiResult.total_bill.toFixed(2)}</strong>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          )}
+
           {/* Billing History */}
           <section className="section billing-section">
             <h2>💰 Billing History</h2>
@@ -446,6 +791,23 @@ function App() {
                         <small>Created: {new Date(record.created_at).toLocaleString()}</small>
                       </div>
                       <p className="record-note">{record.raw_note}</p>
+                      <div className="record-actions">
+                        <button
+                          onClick={() => {
+                            setEditingRecord({...record})
+                            setShowEditRecordForm(true)
+                          }}
+                          className="btn-edit-small"
+                        >
+                          ✏️ Edit
+                        </button>
+                        <button
+                          onClick={() => deleteMedicalRecord(record.id)}
+                          className="btn-delete-small"
+                        >
+                          🗑️ Delete
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
