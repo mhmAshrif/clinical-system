@@ -7,7 +7,7 @@ The AI-Powered Clinic Notes & Billing System is built with a modern three-tier a
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
 │   React Frontend │◄──►│   Go Backend    │◄──►│ PostgreSQL DB   │
-│   (Port 5174)    │    │   (Port 8080)   │    │   (Supabase)    │
+│   (Port 5173)    │    │   (Port 8080)   │    │   (Supabase)    │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
         │                       │                       │
         ▼                       ▼                       ▼
